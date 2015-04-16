@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "socket.io": "0.9.6"
-  },  
+  },
   "files": [
     "bridge.js",
     "node-phantom.js",
@@ -35,5 +35,19 @@
   "optionalDependencies": {},
   "engines": {
     "node": ">=0.8"
+  },
+  "jshintConfig": {
+    "browser": true,
+    "camelcase": true,
+    "curly": false,
+    "indent": 2,
+    "esnext": false,
+    "expr": true,
+    "globalstrict": false,
+    "node": true,
+    "nonbsp": true,
+    "shadow": false,
+    "undef": true,
+    "unused": "vars"
   }
 }
