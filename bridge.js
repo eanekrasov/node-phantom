@@ -1,11 +1,17 @@
 //Released to the public domain.
 /* jshint evil:true */
-var port = phantom.args[0];
+/* global phantom */
 var webpage = require('webpage');
 var controlpage = webpage.create();
 
+var system = require('system');
+var port = system.args[1];
+
+var gDebugLog = false;
+
+
 function respond(response) {
-  //  console.log('responding:'+response);
+  gDebugLog && console.log('responding:', response);
   controlpage.evaluate('function(){socket.emit("res",' + JSON.stringify(response) + ');}');
 }
 var pages = {};
@@ -45,7 +51,8 @@ controlpage.onAlert = function(msg) {
   var cmdId = request[1];
   var id, page, result;
 
-  //  console.log(request);
+  gDebugLog && console.log('request:', request);
+
   if (request[0] === 0) {
     switch (request[2]) {
       case 'createPage':
@@ -154,8 +161,6 @@ controlpage.onAlert = function(msg) {
         break;
     }
   }
-  //console.log('command:'+parts[1]);
-  return;
 };
 
 controlpage.onConsoleMessage = function(msg) {
@@ -163,5 +168,6 @@ controlpage.onConsoleMessage = function(msg) {
 };
 
 controlpage.open('http://127.0.0.1:' + port + '/', function(status) {
-  //console.log(status);
+  gDebugLog && console.log('port:', port);
+  gDebugLog && console.log('status:', status);
 });

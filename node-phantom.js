@@ -3,6 +3,8 @@ var http = require('http');
 var socketio = require('socket.io');
 var child = require('child_process');
 
+var gDebugLog = false;
+
 function callbackOrDummy(callback) {
   if (callback === undefined) {
     callback = function() {};
@@ -13,36 +15,38 @@ function callbackOrDummy(callback) {
 function unwrapArray(arr) {
   return arr && arr.length == 1 ? arr[0] : arr;
 }
+
+function spawnPhantom(phantomPath, parameters, port, callback) {
+  var args = [];
+  for (var parm in parameters) {
+    args.push('--' + parm + '=' + parameters[parm]);
+  }
+  args = args.concat([__dirname + '/bridge.js', port]);
+  var phantomProcess = child.spawn(phantomPath, args);
+  phantomProcess.stdout.on('data', function(data) {
+    return console.log('phantom stdout: ' + data);
+  });
+  phantomProcess.stderr.on('data', function(data) {
+    return console.warn('phantom stderr: ' + data);
+  });
+  var hasErrors = false;
+  phantomProcess.on('error', function() {
+    hasErrors = true;
+  });
+  phantomProcess.on('exit', function(code) {
+    hasErrors = true; //if phantom exits it is always an error
+  });
+  setTimeout(function() { //wait a bit to see if the spawning of phantomjs immediately fails due to bad path or similar
+    callback(hasErrors, phantomProcess);
+  }, 100);
+}
+
 module.exports = {
   create: function(callback, options) {
     if (options === undefined) options = {};
     if (options.phantomPath === undefined) options.phantomPath = 'phantomjs';
     if (options.parameters === undefined) options.parameters = {};
 
-    function spawnPhantom(port, callback) {
-      var args = [];
-      for (var parm in options.parameters) {
-        args.push('--' + parm + '=' + options.parameters[parm]);
-      }
-      args = args.concat([__dirname + '/bridge.js', port]);
-      var phantom = child.spawn(options.phantomPath, args);
-      phantom.stdout.on('data', function(data) {
-        return console.log('phantom stdout: ' + data);
-      });
-      phantom.stderr.on('data', function(data) {
-        return console.warn('phantom stderr: ' + data);
-      });
-      var hasErrors = false;
-      phantom.on('error', function() {
-        hasErrors = true;
-      });
-      phantom.on('exit', function(code) {
-        hasErrors = true; //if phantom exits it is always an error
-      });
-      setTimeout(function() { //wait a bit to see if the spawning of phantomjs immediately fails due to bad path or similar
-        callback(hasErrors, phantom);
-      }, 100);
-    }
     var server = http.createServer(function(request, response) {
       response.writeHead(200, {
         'Content-Type': 'text/html'
@@ -65,7 +69,7 @@ module.exports = {
       // Force XHR polling
       io.set('transports', ['xhr-polling']);
       var port = server.address().port;
-      spawnPhantom(port, function(err, phantom) {
+      spawnPhantom(options.phantomPath, options.parameters, port, function(err, phantomProcess) {
         if (err) {
           server.close();
           callback(true);
@@ -77,7 +81,7 @@ module.exports = {
 
         function request(socket, args, callback) {
           args.splice(1, 0, cmdid);
-          //          console.log('requesting:'+args);
+          gDebugLog && console.log('requesting:', args);
           socket.emit('cmd', JSON.stringify(args));
           cmds[cmdid] = {
             cb: callback
@@ -87,7 +91,7 @@ module.exports = {
         var connectionSocket = null;
         io.sockets.on('connection', function(socket) {
           socket.on('res', function(response) {
-            //            console.log(response);
+            gDebugLog && console.log('response:', response);
             var id = response[0];
             var cmdId = response[1];
             switch (response[2]) {
@@ -218,14 +222,13 @@ module.exports = {
               request(connectionSocket, [0, 'addCookie', cookie], callbackOrDummy(callback));
             },
             exit: function(callback) {
-              phantom.removeListener('exit', prematureExitHandler); //an exit is no longer premature now
+              phantomProcess.removeListener('exit', prematureExitHandler); //an exit is no longer premature now
               request(connectionSocket, [0, 'exit'], callbackOrDummy(callback));
-              phantom.kill('SIGTERM');
+              phantomProcess.kill('SIGTERM');
             },
             on: function() {
-              phantom.on.apply(phantom, arguments);
+              phantomProcess.on.apply(phantomProcess, arguments);
             },
-            _phantom: phantom
           };
           var executeCallback = !connectionSocket;
           connectionSocket = socket;
@@ -239,7 +242,7 @@ module.exports = {
           console.warn('phantom crash: code ' + code);
           server.close();
         };
-        phantom.on('exit', prematureExitHandler);
+        phantomProcess.on('exit', prematureExitHandler);
       });
     });
   }
