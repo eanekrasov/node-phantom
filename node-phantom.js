@@ -1,5 +1,6 @@
 //Released to the public domain.
 var http = require('http');
+var path = require('path');
 var socketio = require('socket.io');
 var child = require('child_process');
 
@@ -7,7 +8,8 @@ var gDebugLog = false;
 
 function callbackOrDummy(callback) {
   if (callback === undefined) {
-    callback = function() {};
+    callback = function () {
+    };
   }
   return callback;
 }
@@ -21,55 +23,54 @@ function spawnPhantom(phantomPath, parameters, port, callback) {
   for (var parm in parameters) {
     args.push('--' + parm + '=' + parameters[parm]);
   }
-  args = args.concat([__dirname + '/bridge.js', port]);
+  args = args.concat([[__dirname, 'bridge.js'].join(path.sep), port]);
+
   var phantomProcess = child.spawn(phantomPath, args);
-  phantomProcess.stdout.on('data', function(data) {
+  phantomProcess.stdout.on('data', function (data) {
     return console.log('phantom stdout: ' + data);
   });
-  phantomProcess.stderr.on('data', function(data) {
+  phantomProcess.stderr.on('data', function (data) {
     return console.warn('phantom stderr: ' + data);
   });
   var hasErrors = false;
-  phantomProcess.on('error', function() {
+  phantomProcess.on('error', function (err) {
     hasErrors = true;
   });
-  phantomProcess.on('exit', function(code) {
+  phantomProcess.on('exit', function (code) {
     hasErrors = true; //if phantom exits it is always an error
   });
-  setTimeout(function() { //wait a bit to see if the spawning of phantomjs immediately fails due to bad path or similar
+  setTimeout(function () { //wait a bit to see if the spawning of phantomjs immediately fails due to bad path or similar
     callback(hasErrors, phantomProcess);
   }, 100);
 }
 
 module.exports = {
-  create: function(callback, options) {
+  create: function (callback, options) {
     if (options === undefined) options = {};
     if (options.phantomPath === undefined) options.phantomPath = 'phantomjs';
     if (options.parameters === undefined) options.parameters = {};
 
-    var server = http.createServer(function(request, response) {
+    var server = http.createServer(function (request, response) {
       response.writeHead(200, {
         'Content-Type': 'text/html'
       });
       response.end([
         '<html><head><script src="/socket.io/socket.io.js" type="text/javascript"></script><script type="text/javascript">',
         'window.onload=function(){',
-          'var socket = new io.connect("http://" + window.location.hostname);',
-          'socket.on("cmd", function(msg){',
-            'alert(msg);',
-          '});',
-          'window.socket = socket;',
+        'var socket = new io.connect("http://" + window.location.host);',
+        'socket.on("cmd", function(msg){',
+        'alert(msg);',
+        '});',
+        'window.socket = socket;',
         '};',
         '</script></head><body></body></html>'
       ].join('\n'));
-    }).listen(null, '127.0.0.1', function() {
+    }).listen(null, '127.0.0.1', function () {
       var io = socketio.listen(server, {
         'log level': 1
       });
-      // Force XHR polling
-      io.set('transports', ['xhr-polling']);
       var port = server.address().port;
-      spawnPhantom(options.phantomPath, options.parameters, port, function(err, phantomProcess) {
+      spawnPhantom(options.phantomPath, options.parameters, port, function (err, phantomProcess) {
         if (err) {
           server.close();
           callback(true);
@@ -88,66 +89,70 @@ module.exports = {
           };
           cmdid++;
         }
+
         var connectionSocket = null;
-        io.sockets.on('connection', function(socket) {
-          socket.on('res', function(response) {
+        io.sockets.on('connection', function (socket) {
+          socket.on('res', function (response) {
             gDebugLog && console.log('response:', response);
             var id = response[0];
             var cmdId = response[1];
             switch (response[2]) {
               case 'pageCreated':
                 var pageProxy = {
-                  open: function(url, callback) {
+                  open: function (url, callback) {
                     if (callback === undefined) {
                       request(connectionSocket, [id, 'pageOpen', url]);
                     } else {
                       request(connectionSocket, [id, 'pageOpenWithCallback', url], callback);
                     }
                   },
-                  post: function(url, data, callback) {
+                  post: function (url, data, callback) {
                     if (callback === undefined) {
                       request(connectionSocket, [id, 'pagePost', url, data]);
                     } else {
                       request(connectionSocket, [id, 'pagePostWithCallback', url, data], callback);
                     }
                   },
-                  close: function(callback) {
+                  clearMemoryCache: function (callback) {
+                    request(socket, [id, 'pageClearMemoryCache'], callbackOrDummy(callback));
+                  },
+                  close: function (callback) {
                     request(connectionSocket, [id, 'pageClose'], callbackOrDummy(callback));
                   },
-                  render: function(filename, callback) {
+                  render: function (filename, callback) {
                     request(connectionSocket, [id, 'pageRender', filename], callbackOrDummy(callback));
                   },
-                  renderBase64: function(extension, callback) {
+                  renderBase64: function (extension, callback) {
                     request(connectionSocket, [id, 'pageRenderBase64', extension], callbackOrDummy(callback));
                   },
-                  injectJs: function(url, callback) {
+                  injectJs: function (url, callback) {
                     request(connectionSocket, [id, 'pageInjectJs', url], callbackOrDummy(callback));
                   },
-                  includeJs: function(url, callback) {
+                  includeJs: function (url, callback) {
                     request(connectionSocket, [id, 'pageIncludeJs', url], callbackOrDummy(callback));
                   },
-                  sendEvent: function(event, x, y, callback) {
+                  sendEvent: function (event, x, y, callback) {
                     request(connectionSocket, [id, 'pageSendEvent', event, x, y], callbackOrDummy(callback));
                   },
-                  uploadFile: function(selector, filename, callback) {
+                  uploadFile: function (selector, filename, callback) {
                     request(connectionSocket, [id, 'pageUploadFile', selector, filename], callbackOrDummy(callback));
                   },
-                  evaluate: function(evaluator, callback) {
+                  evaluate: function (evaluator, callback) {
                     request(connectionSocket, [id, 'pageEvaluate', evaluator.toString()].concat(Array.prototype.slice.call(arguments, 2)), callbackOrDummy(callback));
                   },
-                  evaluateAsync: function(evaluator, callback) {
+                  evaluateAsync: function (evaluator, callback) {
                     request(connectionSocket, [id, 'pageEvaluateAsync', evaluator.toString()].concat(Array.prototype.slice.call(arguments, 2)), callbackOrDummy(callback));
                   },
-                  set: function(name, value, callback) {
+                  set: function (name, value, callback) {
                     request(connectionSocket, [id, 'pageSet', name, value], callbackOrDummy(callback));
                   },
-                  get: function(name, callback) {
+                  get: function (name, callback) {
                     request(connectionSocket, [id, 'pageGet', name], callbackOrDummy(callback));
                   },
-                  setFn: function(pageCallbackName, fn, callback) {
+                  setFn: function (pageCallbackName, fn, callback) {
                     request(connectionSocket, [id, 'pageSetFn', pageCallbackName, fn.toString()], callbackOrDummy(callback));
                   },
-                  setViewport: function(viewport, callback) {
+                  setViewport: function (viewport, callback) {
                     request(connectionSocket, [id, 'pageSetViewport', viewport.width, viewport.height], callbackOrDummy(callback));
                   }
                 };
@@ -160,6 +165,10 @@ module.exports = {
                 server.close();
                 io.set('client store expiration', 0);
                 cmds[cmdId].cb();
+                delete cmds[cmdId];
+                break;
+              case 'pageCacheCleared':
+                cmds[cmdId].cb(null, response[3]);
                 delete cmds[cmdId];
                 break;
               case 'pageJsInjected':
@@ -205,28 +214,31 @@ module.exports = {
                 break;
             }
           });
-          socket.on('push', function(request) {
+          socket.on('push', function (request) {
             var id = request[0];
             var cmd = request[1];
             var callback = callbackOrDummy(pages[id] ? pages[id][cmd] : undefined);
             callback(unwrapArray(request[2]));
           });
           var proxy = {
-            createPage: function(callback) {
+            callback: function (fn) {
+              return '__phantomCallback__' + fn.toString();
+            },
+            createPage: function (callback) {
               request(connectionSocket, [0, 'createPage'], callbackOrDummy(callback));
             },
-            injectJs: function(filename, callback) {
+            injectJs: function (filename, callback) {
               request(connectionSocket, [0, 'injectJs', filename], callbackOrDummy(callback));
             },
-            addCookie: function(cookie, callback) {
+            addCookie: function (cookie, callback) {
               request(connectionSocket, [0, 'addCookie', cookie], callbackOrDummy(callback));
             },
-            exit: function(callback) {
+            exit: function (callback) {
               phantomProcess.removeListener('exit', prematureExitHandler); //an exit is no longer premature now
               request(connectionSocket, [0, 'exit'], callbackOrDummy(callback));
               phantomProcess.kill('SIGTERM');
             },
-            on: function() {
+            on: function () {
               phantomProcess.on.apply(phantomProcess, arguments);
             },
           };
@@ -238,7 +250,7 @@ module.exports = {
         });
         // An exit event listener that is registered AFTER the phantomjs process
         // is successfully created.
-        var prematureExitHandler = function(code, signal) {
+        var prematureExitHandler = function (code, signal) {
           console.warn('phantom crash: code ' + code);
           server.close();
         };

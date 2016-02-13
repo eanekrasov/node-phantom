@@ -1,8 +1,14 @@
 {
   "author": "Alex Scheel Meyer (http://www.linkedin.com/in/alexscheelmeyer)",
-  "contributors": [{
-    "name" :"cytb"
-  }],
+  "contributors": [
+    {
+      "name": "cytb"
+    },
+    {
+      "name": "Fabio 'MrWHO' Torchetti",
+      "email": "mrwho@wedjaa.net"
+    }
+  ],
   "name": "node-phantom-fork",
   "description": "bridge between node.js and PhantomJS (fork version of node-phantom)",
   "version": "0.2.6",
@@ -27,10 +33,9 @@
     "node-phantom.js",
     "README.md"
   ],
-  "optionalDependencies": {},
   "devDependencies": {
-     "mocha": "*",
-     "pngjs": "0.4.0"
+    "mocha": "*",
+    "pngjs": "0.4.0"
   },
   "optionalDependencies": {},
   "engines": {

@@ -22,10 +22,30 @@ It includes fix of issues
   callback issue
   socket.io dependency
   living phantom-js process
-  
+
 and enhancements
   post() function (POST method request)
   using travis
+
+Phantom Callbacks
+-----------------
+
+There is a very basic implementation of phantom callbacks. When you're in need of setting a property to a phantom callback function you can write:
+
+```
+  var options = {
+    footer: {
+      contents: ph.callback(function(page, pages) {
+        return "Page " + page + " of " + pages;
+      })
+    }
+  }
+```
+
+*phantomSession* is the phantom session you got back from the ```phantom.create(function(err,ph) {})``` call.
+
+Remember that the code will be executed in the phantom context -- in a completely different environment -- so your callback functions won't have
+access to any of the variables and globals, so you may have to hack your way around it.
 
 Node-phantom
 ---------------
